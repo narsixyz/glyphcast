@@ -15,6 +15,7 @@ import {
   type ImageToAsciiResult,
 } from "@/lib/ascii/ascii-converter";
 import { hexToRgba, type ASCIITextEffect } from "@/lib/ascii/ascii-config";
+import { paintGlyphs } from "@/lib/ascii/ascii-painter";
 
 export interface AsciiCanvasHandle {
   /** Returns the most recently rendered ASCII frame as a single string. */
@@ -80,6 +81,7 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
   const threshold = useAsciiStore((s) => s.threshold);
   const charset = useAsciiStore((s) => s.charset);
   const invert = useAsciiStore((s) => s.invert);
+  const conversion = useAsciiStore((s) => s.conversion);
   const isPlaying = useAsciiStore((s) => s.isPlaying);
   const currentFrame = useAsciiStore((s) => s.currentFrame);
   const totalFrames = useAsciiStore((s) => s.totalFrames);
@@ -93,6 +95,7 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
   const dColumns = useDeferredValue(columns);
   const dThreshold = useDeferredValue(threshold);
   const dCharset = useDeferredValue(charset);
+  const dConversion = useDeferredValue(conversion);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastResultRef = useRef<ImageToAsciiResult | null>(null);
@@ -104,6 +107,11 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
     appearance.fontSize * CELL_WIDTH_RATIO + appearance.letterSpacing;
   const cellHeight = appearance.fontSize * appearance.lineHeight;
   const cellAspect = cellHeight > 0 ? cellWidth / cellHeight : 0.5;
+  // Only needed when glyphs are measured; resolving reads computed styles.
+  const measureFont =
+    conversion.glyphMapping !== "linear"
+      ? resolveCanvasFontFamily(appearance.fontFamily)
+      : undefined;
 
   const draw = useCallback(
     (result: ImageToAsciiResult | null) => {
@@ -149,6 +157,7 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
 
       paintCells({
         ctx,
+        dpr,
         result,
         useColors,
         textColor: appearance.textColor,
@@ -195,8 +204,20 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
       useColors,
       cellAspect,
       threshold: dThreshold,
+      ...dConversion,
+      font: measureFont,
     });
-  }, [source, dColumns, dCharset, invert, useColors, cellAspect, dThreshold]);
+  }, [
+    source,
+    dColumns,
+    dCharset,
+    invert,
+    useColors,
+    cellAspect,
+    dThreshold,
+    dConversion,
+    measureFont,
+  ]);
 
   // --- Image mode redraws --------------------------------------------------
   useEffect(() => {
@@ -381,6 +402,8 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
           useColors,
           cellAspect,
           threshold,
+          ...conversion,
+          font: measureFont,
         };
 
         if (source.kind === "image") {
@@ -440,6 +463,8 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
           useColors,
           cellAspect,
           threshold,
+          ...conversion,
+          font: measureFont,
         };
 
         if (source.kind === "image") {
@@ -491,6 +516,8 @@ export function AsciiCanvas({ ref, className }: AsciiCanvasProps) {
       useColors,
       cellAspect,
       threshold,
+      conversion,
+      measureFont,
       totalFrames,
     ],
   );
@@ -547,6 +574,7 @@ function yieldToMain(): Promise<void> {
 
 interface PaintCellsArgs {
   ctx: CanvasRenderingContext2D;
+  dpr: number;
   result: ImageToAsciiResult;
   useColors: boolean;
   textColor: string;
@@ -562,6 +590,7 @@ interface PaintCellsArgs {
 
 function paintCells({
   ctx,
+  dpr,
   result,
   useColors,
   textColor,
@@ -573,77 +602,54 @@ function paintCells({
   seed,
   threshold,
 }: PaintCellsArgs) {
-  const lines = result.text.split("\n");
-  const lineCount = Math.min(lines.length, result.rows);
-
-  if (effect === "neon") {
-    // threshold scales glow from base to 3× base blur.
-    const glowBase = Math.max(2, cellHeight * 0.6);
-    ctx.shadowBlur = glowBase * (1 + threshold * 2);
-    ctx.shadowColor = useColors ? "#ffffff" : textColor;
+  let fill: string | CanvasGradient = textColor;
+  if (effect === "matrix") fill = "#39ff14";
+  if (effect === "gradient") {
+    fill = ctx.createLinearGradient(0, 0, cssWidth, cssHeight);
+    fill.addColorStop(0, "#7c3aed");
+    fill.addColorStop(0.5, "#06b6d4");
+    fill.addColorStop(1, "#22c55e");
+  }
+  if (effect === "burn") {
+    fill = ctx.createLinearGradient(0, 0, 0, cssHeight);
+    fill.addColorStop(0, "#fde68a");
+    fill.addColorStop(0.6, "#f97316");
+    fill.addColorStop(1, "#7f1d1d");
+  }
+  if (effect === "neural") {
+    fill = ctx.createLinearGradient(0, 0, cssWidth, 0);
+    fill.addColorStop(0, "#312e81");
+    fill.addColorStop(0.5, "#9333ea");
+    fill.addColorStop(1, "#22d3ee");
   }
 
-  let gradient: CanvasGradient | null = null;
-  if (effect === "gradient" && !useColors) {
-    gradient = ctx.createLinearGradient(0, 0, cssWidth, cssHeight);
-    gradient.addColorStop(0, "#7c3aed");
-    gradient.addColorStop(0.5, "#06b6d4");
-    gradient.addColorStop(1, "#22c55e");
-  }
-  if (effect === "burn" && !useColors) {
-    gradient = ctx.createLinearGradient(0, 0, 0, cssHeight);
-    gradient.addColorStop(0, "#fde68a");
-    gradient.addColorStop(0.6, "#f97316");
-    gradient.addColorStop(1, "#7f1d1d");
-  }
-  if (effect === "neural" && !useColors) {
-    gradient = ctx.createLinearGradient(0, 0, cssWidth, 0);
-    gradient.addColorStop(0, "#312e81");
-    gradient.addColorStop(0.5, "#9333ea");
-    gradient.addColorStop(1, "#22d3ee");
-  }
-
-  const matrixGreen = "#39ff14";
   // glitch: threshold expands how many rows jitter (0=rare, 1=many)
   const glitchModulo = Math.max(2, Math.round(11 * (1 - threshold * 0.8)));
-  const jitterMod = effect === "glitch" ? (seed % 7) - 3 : 0;
+  const jitter = (seed % 7) - 3;
 
-  for (let y = 0; y < lineCount; y++) {
-    const line = lines[y];
-    if (!line) continue;
-    const yPx = y * cellHeight;
-    for (let x = 0; x < line.length; x++) {
-      const ch = line[x];
-      if (ch === " ") continue;
-      const xPx =
-        x * cellWidth +
-        (effect === "glitch" && (y + seed) % glitchModulo === 0
-          ? jitterMod
-          : 0);
-
-      let fill: string | CanvasGradient;
-      if (useColors && result.colors) {
-        fill = result.colors[y]?.[x] ?? textColor;
-      } else if (effect === "matrix") {
-        fill = matrixGreen;
-      } else if (effect === "video") {
-        // Slight scanline tint — alternate rows brighten/dim.
-        fill = y % 2 === 0 ? textColor : hexToRgba(textColor, 0.7);
-      } else if (gradient) {
-        fill = gradient;
-      } else {
-        fill = textColor;
-      }
-
-      ctx.fillStyle = fill;
-      ctx.fillText(ch, xPx, yPx);
-    }
-  }
-
-  if (effect === "neon") {
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
-  }
+  paintGlyphs({
+    ctx,
+    dpr,
+    result,
+    cellWidth,
+    cellHeight,
+    fill,
+    useColors,
+    rowOffset:
+      effect === "glitch"
+        ? (y) => ((y + seed) % glitchModulo === 0 ? jitter : 0)
+        : undefined,
+    // Slight scanline tint — alternate rows brighten/dim.
+    rowAlpha: effect === "video" ? (y) => (y % 2 === 0 ? 1 : 0.7) : undefined,
+    // threshold scales glow from base to 3× base blur.
+    shadow:
+      effect === "neon"
+        ? {
+            blur: Math.max(2, cellHeight * 0.6) * (1 + threshold * 2),
+            color: useColors ? "#ffffff" : textColor,
+          }
+        : undefined,
+  });
 }
 
 interface PaintEffectOverlayArgs {

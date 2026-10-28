@@ -4,6 +4,10 @@ import {
   DEFAULT_ASCII_APPEARANCE,
   type ASCIIAppearance,
 } from "@/lib/ascii/ascii-config";
+import type {
+  AsciiDither,
+  AsciiGlyphMapping,
+} from "@/lib/ascii/ascii-converter";
 
 export type StudioMode = "image" | "video" | "component";
 export type SourceKind = "image" | "video" | "gif";
@@ -23,6 +27,29 @@ export interface StudioSource {
   gifFrames?: { canvas: HTMLCanvasElement; delayMs: number }[];
 }
 
+/** Tone / quantization settings forwarded to `imageToAscii`. */
+export interface AsciiConversionSettings {
+  contrast: number;
+  gamma: number;
+  autoLevels: boolean;
+  dither: AsciiDither;
+  glyphMapping: AsciiGlyphMapping;
+  edges: boolean;
+  edgeThreshold: number;
+  samples: number;
+}
+
+export const DEFAULT_CONVERSION: AsciiConversionSettings = {
+  contrast: 0,
+  gamma: 1,
+  autoLevels: false,
+  dither: "none",
+  glyphMapping: "shape",
+  edges: false,
+  edgeThreshold: 0.35,
+  samples: 4,
+};
+
 export interface StudioState {
   source: StudioSource | null;
   appearance: ASCIIAppearance;
@@ -32,6 +59,7 @@ export interface StudioState {
   charset: string;
   charsetPresetId: string | null;
   invert: boolean;
+  conversion: AsciiConversionSettings;
   responsiveFit: boolean;
 
   currentFrame: number;
@@ -50,6 +78,8 @@ export interface StudioState {
   setCharset: (chars: string) => void;
   setCharsetPreset: (id: string) => void;
   setInvert: (v: boolean) => void;
+  /** Merge a partial update into the current conversion settings. */
+  patchConversion: (patch: Partial<AsciiConversionSettings>) => void;
   setResponsiveFit: (v: boolean) => void;
   setMode: (mode: StudioMode) => void;
   setPlaying: (playing: boolean) => void;
@@ -75,6 +105,7 @@ export const useAsciiStore = create<StudioState>((set) => ({
   charset: DEFAULT_PRESET.chars,
   charsetPresetId: DEFAULT_PRESET.id,
   invert: false,
+  conversion: DEFAULT_CONVERSION,
   responsiveFit: true,
 
   currentFrame: 0,
@@ -130,6 +161,8 @@ export const useAsciiStore = create<StudioState>((set) => ({
     }),
 
   setInvert: (v) => set(() => ({ invert: v })),
+  patchConversion: (patch) =>
+    set((state) => ({ conversion: { ...state.conversion, ...patch } })),
   setResponsiveFit: (v) => set(() => ({ responsiveFit: v })),
   setMode: (mode) => set(() => ({ mode })),
   setPlaying: (playing) => set(() => ({ isPlaying: playing })),

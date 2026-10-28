@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { ColorField } from "@/components/studio/color-field";
+import { RangeField } from "@/components/studio/range-field";
 import { useTheme } from "@/components/providers/theme-provider";
 import ToggleButton from "@/components/shared/toggle-button";
 import { Button } from "@/components/ui/button";
@@ -185,24 +186,18 @@ function MockSliderField({
   step: number;
   display?: string;
 }) {
-  const fieldName = `landing-studio-${formControlSlug(label)}`;
+  const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+  const unit = display?.replace(/^[-\d.]+/, "") ?? "";
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <FieldLabel>{label}</FieldLabel>
-        <span className="font-mono text-[10px] tabular-nums text-[#111] dark:text-zinc-300">
-          {display ?? value}
-        </span>
-      </div>
-      <Slider
-        name={fieldName}
-        className={STUDIO_SLIDER_CLASS}
-        defaultValue={[value]}
-        max={max}
-        min={min}
-        step={step}
-      />
-    </div>
+    <RangeField
+      label={label}
+      name={`landing-studio-${formControlSlug(label)}`}
+      defaultValue={value}
+      min={min}
+      max={max}
+      step={step}
+      format={(v) => `${v.toFixed(decimals)}${unit}`}
+    />
   );
 }
 
@@ -212,6 +207,8 @@ export default function StudioUiPreview() {
 
   const [autoFit, setAutoFit] = useState(true);
   const [invertMapping, setInvertMapping] = useState(false);
+  const [autoLevels, setAutoLevels] = useState(false);
+  const [edgeLines, setEdgeLines] = useState(false);
   const [useSourceColors, setUseSourceColors] = useState(false);
   const [showFrameCounter, setShowFrameCounter] = useState(false);
   const [isBold, setIsBold] = useState(false);
@@ -407,13 +404,33 @@ export default function StudioUiPreview() {
           </MockAccordion>
 
           <MockAccordion title="Conversion" action={<MockResetChip />}>
-            <MockSliderField
-              label="Density Threshold"
-              value={30}
-              min={-100}
-              max={100}
-              step={1}
-            />
+            <div className="space-y-1.5">
+              <MockSliderField
+                label="Brightness"
+                value={30}
+                min={-100}
+                max={100}
+                step={1}
+              />
+              <MockSliderField
+                label="Contrast"
+                value={0}
+                min={-100}
+                max={100}
+                step={1}
+              />
+              <MockSliderField
+                label="Gamma"
+                value={1}
+                min={0.2}
+                max={3}
+                step={0.05}
+                display="1.00"
+              />
+            </div>
+            <Row label="Auto Levels">
+              <ToggleButton toggle={autoLevels} setToggle={setAutoLevels} />
+            </Row>
 
             <div className="space-y-2 pt-2">
               <div className="space-y-1.5">
@@ -469,6 +486,78 @@ export default function StudioUiPreview() {
                 setToggle={setInvertMapping}
               />
             </Row>
+            <div className="space-y-2">
+              <FieldLabel>Glyph Matching</FieldLabel>
+              <Select
+                name="landing-studio-conversion-glyph-mapping"
+                defaultValue="shape"
+              >
+                <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={STUDIO_SELECT_CONTENT}>
+                  <SelectItem value="shape" className={STUDIO_SELECT_ITEM}>
+                    Shape (sharpest)
+                  </SelectItem>
+                  <SelectItem value="measured" className={STUDIO_SELECT_ITEM}>
+                    Density
+                  </SelectItem>
+                  <SelectItem value="linear" className={STUDIO_SELECT_ITEM}>
+                    Charset order
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <MiniDivider label="Detail" />
+            <div className="space-y-2">
+              <FieldLabel>Dithering</FieldLabel>
+              <Select
+                name="landing-studio-conversion-dither"
+                defaultValue="none"
+              >
+                <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={STUDIO_SELECT_CONTENT}>
+                  <SelectItem value="none" className={STUDIO_SELECT_ITEM}>
+                    None
+                  </SelectItem>
+                  <SelectItem
+                    value="floyd-steinberg"
+                    className={STUDIO_SELECT_ITEM}
+                  >
+                    Floyd–Steinberg
+                  </SelectItem>
+                  <SelectItem value="atkinson" className={STUDIO_SELECT_ITEM}>
+                    Atkinson
+                  </SelectItem>
+                  <SelectItem value="ordered" className={STUDIO_SELECT_ITEM}>
+                    Ordered (best for video)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <MockSliderField
+              label="Sampling"
+              value={4}
+              min={1}
+              max={8}
+              step={1}
+              display="4×"
+            />
+            <Row label="Edge Lines">
+              <ToggleButton toggle={edgeLines} setToggle={setEdgeLines} />
+            </Row>
+            {edgeLines && (
+              <MockSliderField
+                label="Edge Sensitivity"
+                value={0.65}
+                min={0}
+                max={0.95}
+                step={0.01}
+              />
+            )}
           </MockAccordion>
 
           <MockAccordion title="Appearance" action={<MockResetChip />}>
@@ -542,7 +631,7 @@ export default function StudioUiPreview() {
               step={0.5}
               display="10.0px"
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <MockSliderField
                 label="Line Height"
                 value={0.95}
