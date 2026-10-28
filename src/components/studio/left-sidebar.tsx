@@ -24,7 +24,6 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
 import ToggleButton from "@/components/shared/toggle-button";
 import {
   Select,
@@ -34,8 +33,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ColorField } from "@/components/studio/color-field";
+import { RangeField } from "@/components/studio/range-field";
 
-import { useAsciiStore, type StudioSource } from "@/lib/store";
+import {
+  DEFAULT_CONVERSION,
+  useAsciiStore,
+  type StudioSource,
+} from "@/lib/store";
+import type {
+  AsciiDither,
+  AsciiGlyphMapping,
+} from "@/lib/ascii/ascii-converter";
 import {
   ASCII_FONT_PRESETS,
   ASCII_CHAR_PRESETS,
@@ -58,7 +66,6 @@ import {
   STUDIO_OUTLINE_TERTIARY,
   STUDIO_SELECT_CONTENT,
   STUDIO_SELECT_ITEM,
-  STUDIO_SLIDER_CLASS,
   STUDIO_TEXT_LABEL,
   STUDIO_TEXT_META,
 } from "@/lib/studio-theme";
@@ -196,25 +203,17 @@ function SliderField({
   onChange: (v: number) => void;
   display?: string;
 }) {
-  const fieldName = name ?? `studio-${formControlSlug(label)}`;
   return (
-    <div className="space-y-2 py-1">
-      <div className="flex items-center justify-between">
-        <FieldLabel>{label}</FieldLabel>
-        <span className="min-w-[3ch] text-right font-mono text-[10px] tabular-nums text-[#111] dark:text-zinc-100">
-          {display ?? value}
-        </span>
-      </div>
-      <Slider
-        className={STUDIO_SLIDER_CLASS}
-        name={fieldName}
-        min={min}
-        max={max}
-        step={step}
-        value={[value]}
-        onValueChange={([v]) => v !== undefined && onChange(v)}
-      />
-    </div>
+    <RangeField
+      label={label}
+      name={name ?? `studio-${formControlSlug(label)}`}
+      value={value}
+      min={min}
+      max={max}
+      step={step}
+      onChange={onChange}
+      format={display !== undefined ? () => display : undefined}
+    />
   );
 }
 
@@ -479,6 +478,19 @@ const DEFAULT_PRESET =
   ASCII_CHAR_PRESETS.find((preset) => preset.id === "terminal") ??
   ASCII_CHAR_PRESETS[0];
 
+const DITHER_OPTIONS: { value: AsciiDither; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "floyd-steinberg", label: "Floyd–Steinberg" },
+  { value: "atkinson", label: "Atkinson" },
+  { value: "ordered", label: "Ordered (best for video)" },
+];
+
+const GLYPH_MAPPING_OPTIONS: { value: AsciiGlyphMapping; label: string }[] = [
+  { value: "shape", label: "Shape (sharpest)" },
+  { value: "measured", label: "Density" },
+  { value: "linear", label: "Charset order" },
+];
+
 function ConversionSection() {
   const threshold = useAsciiStore((s) => s.threshold);
   const invert = useAsciiStore((s) => s.invert);
@@ -488,11 +500,14 @@ function ConversionSection() {
   const setInvert = useAsciiStore((s) => s.setInvert);
   const setCharset = useAsciiStore((s) => s.setCharset);
   const setCharsetPreset = useAsciiStore((s) => s.setCharsetPreset);
+  const conversion = useAsciiStore((s) => s.conversion);
+  const patchConversion = useAsciiStore((s) => s.patchConversion);
 
   const reset = () => {
     setThreshold(-12);
     setInvert(false);
     setCharsetPreset(DEFAULT_PRESET.id);
+    patchConversion(DEFAULT_CONVERSION);
   };
 
   return (
@@ -501,14 +516,40 @@ function ConversionSection() {
       defaultOpen={true}
       action={<ResetChip onClick={reset} />}
     >
-      <SliderField
-        label="Density Threshold"
-        value={threshold}
-        min={-100}
-        max={100}
-        step={1}
-        onChange={setThreshold}
-      />
+      <div className="space-y-1.5">
+        <SliderField
+          label="Brightness"
+          name="studio-conversion-threshold"
+          value={threshold}
+          min={-100}
+          max={100}
+          step={1}
+          onChange={setThreshold}
+        />
+        <SliderField
+          label="Contrast"
+          value={conversion.contrast}
+          min={-100}
+          max={100}
+          step={1}
+          onChange={(v) => patchConversion({ contrast: v })}
+        />
+        <SliderField
+          label="Gamma"
+          value={conversion.gamma}
+          min={0.2}
+          max={3}
+          step={0.05}
+          onChange={(v) => patchConversion({ gamma: v })}
+          display={conversion.gamma.toFixed(2)}
+        />
+      </div>
+      <Row label="Auto Levels">
+        <ToggleButton
+          toggle={conversion.autoLevels}
+          setToggle={(v) => patchConversion({ autoLevels: v })}
+        />
+      </Row>
 
       <div className="space-y-2 pt-2">
         <div className="space-y-1.5">
@@ -572,6 +613,82 @@ function ConversionSection() {
       <Row label="Invert Mapping">
         <ToggleButton toggle={invert} setToggle={setInvert} />
       </Row>
+      <div className="space-y-2">
+        <FieldLabel>Glyph Matching</FieldLabel>
+        <Select
+          name="studio-conversion-glyph-mapping"
+          value={conversion.glyphMapping}
+          onValueChange={(v) =>
+            patchConversion({ glyphMapping: v as AsciiGlyphMapping })
+          }
+        >
+          <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className={STUDIO_SELECT_CONTENT}>
+            {GLYPH_MAPPING_OPTIONS.map((o) => (
+              <SelectItem
+                key={o.value}
+                value={o.value}
+                className={STUDIO_SELECT_ITEM}
+              >
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <MiniDivider label="Detail" />
+      <div className="space-y-2">
+        <FieldLabel>Dithering</FieldLabel>
+        <Select
+          name="studio-conversion-dither"
+          value={conversion.dither}
+          onValueChange={(v) => patchConversion({ dither: v as AsciiDither })}
+        >
+          <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className={STUDIO_SELECT_CONTENT}>
+            {DITHER_OPTIONS.map((o) => (
+              <SelectItem
+                key={o.value}
+                value={o.value}
+                className={STUDIO_SELECT_ITEM}
+              >
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <SliderField
+        label="Sampling"
+        value={conversion.samples}
+        min={1}
+        max={8}
+        step={1}
+        onChange={(v) => patchConversion({ samples: v })}
+        display={`${conversion.samples}×`}
+      />
+      <Row label="Edge Lines">
+        <ToggleButton
+          toggle={conversion.edges}
+          setToggle={(v) => patchConversion({ edges: v })}
+        />
+      </Row>
+      {conversion.edges && (
+        <SliderField
+          label="Edge Sensitivity"
+          value={1 - conversion.edgeThreshold}
+          min={0}
+          max={0.95}
+          step={0.01}
+          onChange={(v) => patchConversion({ edgeThreshold: 1 - v })}
+          display={`${Math.round((1 - conversion.edgeThreshold) * 100)}%`}
+        />
+      )}
     </AccordionSection>
   );
 }
@@ -682,7 +799,7 @@ function AppearanceSection() {
         onChange={(v) => patchAppearance({ fontSize: v })}
         display={`${appearance.fontSize.toFixed(1)}px`}
       />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-1.5">
         <SliderField
           label="Line Height"
           value={appearance.lineHeight}

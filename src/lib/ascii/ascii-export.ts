@@ -632,7 +632,8 @@ function drawFrame({
   // ── Paint characters cell-by-cell (mirrors paintCells exactly) ───────────
   const rows = normalizeFrame(frame);
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-    const row = rows[rowIdx];
+    // Split by code point so astral glyphs occupy a single cell.
+    const row = Array.from(rows[rowIdx]);
     const yPx = y + rowIdx * metrics.lineHeightPx;
 
     for (let colIdx = 0; colIdx < row.length; colIdx++) {
@@ -764,7 +765,7 @@ function cropFrames(frames: string[]): string[] {
   for (const frame of frames) {
     const rows = frame.split("\n");
     for (let r = 0; r < rows.length; r++) {
-      const row = rows[r];
+      const row = Array.from(rows[r]);
       for (let c = 0; c < row.length; c++) {
         if (row[c] !== " ") {
           if (r < minRow) minRow = r;
@@ -782,7 +783,11 @@ function cropFrames(frames: string[]): string[] {
     frame
       .split("\n")
       .slice(minRow, maxRow + 1)
-      .map((row) => row.slice(minCol, maxCol + 1))
+      .map((row) =>
+        Array.from(row)
+          .slice(minCol, maxCol + 1)
+          .join(""),
+      )
       .join("\n"),
   );
 }

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { ColorField } from "@/components/studio/color-field";
+import { RangeField } from "@/components/studio/range-field";
 import { useTheme } from "@/components/providers/theme-provider";
 import ToggleButton from "@/components/shared/toggle-button";
 import { Button } from "@/components/ui/button";
@@ -185,24 +186,18 @@ function MockSliderField({
   step: number;
   display?: string;
 }) {
-  const fieldName = `landing-studio-${formControlSlug(label)}`;
+  const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+  const unit = display?.replace(/^[-\d.]+/, "") ?? "";
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <FieldLabel>{label}</FieldLabel>
-        <span className="font-mono text-[10px] tabular-nums text-[#111] dark:text-zinc-300">
-          {display ?? value}
-        </span>
-      </div>
-      <Slider
-        name={fieldName}
-        className={STUDIO_SLIDER_CLASS}
-        defaultValue={[value]}
-        max={max}
-        min={min}
-        step={step}
-      />
-    </div>
+    <RangeField
+      label={label}
+      name={`landing-studio-${formControlSlug(label)}`}
+      defaultValue={value}
+      min={min}
+      max={max}
+      step={step}
+      format={(v) => `${v.toFixed(decimals)}${unit}`}
+    />
   );
 }
 
@@ -408,7 +403,7 @@ export default function StudioUiPreview() {
 
           <MockAccordion title="Conversion" action={<MockResetChip />}>
             <MockSliderField
-              label="Density Threshold"
+              label="Brightness"
               value={30}
               min={-100}
               max={100}
@@ -542,7 +537,7 @@ export default function StudioUiPreview() {
               step={0.5}
               display="10.0px"
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <MockSliderField
                 label="Line Height"
                 value={0.95}
