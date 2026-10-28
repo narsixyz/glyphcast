@@ -207,6 +207,8 @@ export default function StudioUiPreview() {
 
   const [autoFit, setAutoFit] = useState(true);
   const [invertMapping, setInvertMapping] = useState(false);
+  const [autoLevels, setAutoLevels] = useState(false);
+  const [edgeLines, setEdgeLines] = useState(false);
   const [useSourceColors, setUseSourceColors] = useState(false);
   const [showFrameCounter, setShowFrameCounter] = useState(false);
   const [isBold, setIsBold] = useState(false);
@@ -402,13 +404,33 @@ export default function StudioUiPreview() {
           </MockAccordion>
 
           <MockAccordion title="Conversion" action={<MockResetChip />}>
-            <MockSliderField
-              label="Brightness"
-              value={30}
-              min={-100}
-              max={100}
-              step={1}
-            />
+            <div className="space-y-1.5">
+              <MockSliderField
+                label="Brightness"
+                value={30}
+                min={-100}
+                max={100}
+                step={1}
+              />
+              <MockSliderField
+                label="Contrast"
+                value={0}
+                min={-100}
+                max={100}
+                step={1}
+              />
+              <MockSliderField
+                label="Gamma"
+                value={1}
+                min={0.2}
+                max={3}
+                step={0.05}
+                display="1.00"
+              />
+            </div>
+            <Row label="Auto Levels">
+              <ToggleButton toggle={autoLevels} setToggle={setAutoLevels} />
+            </Row>
 
             <div className="space-y-2 pt-2">
               <div className="space-y-1.5">
@@ -464,6 +486,78 @@ export default function StudioUiPreview() {
                 setToggle={setInvertMapping}
               />
             </Row>
+            <div className="space-y-2">
+              <FieldLabel>Glyph Matching</FieldLabel>
+              <Select
+                name="landing-studio-conversion-glyph-mapping"
+                defaultValue="shape"
+              >
+                <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={STUDIO_SELECT_CONTENT}>
+                  <SelectItem value="shape" className={STUDIO_SELECT_ITEM}>
+                    Shape (sharpest)
+                  </SelectItem>
+                  <SelectItem value="measured" className={STUDIO_SELECT_ITEM}>
+                    Density
+                  </SelectItem>
+                  <SelectItem value="linear" className={STUDIO_SELECT_ITEM}>
+                    Charset order
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <MiniDivider label="Detail" />
+            <div className="space-y-2">
+              <FieldLabel>Dithering</FieldLabel>
+              <Select
+                name="landing-studio-conversion-dither"
+                defaultValue="none"
+              >
+                <SelectTrigger className={cn(STUDIO_FIELD_CLASS, "font-sans")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={STUDIO_SELECT_CONTENT}>
+                  <SelectItem value="none" className={STUDIO_SELECT_ITEM}>
+                    None
+                  </SelectItem>
+                  <SelectItem
+                    value="floyd-steinberg"
+                    className={STUDIO_SELECT_ITEM}
+                  >
+                    Floyd–Steinberg
+                  </SelectItem>
+                  <SelectItem value="atkinson" className={STUDIO_SELECT_ITEM}>
+                    Atkinson
+                  </SelectItem>
+                  <SelectItem value="ordered" className={STUDIO_SELECT_ITEM}>
+                    Ordered (best for video)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <MockSliderField
+              label="Sampling"
+              value={4}
+              min={1}
+              max={8}
+              step={1}
+              display="4×"
+            />
+            <Row label="Edge Lines">
+              <ToggleButton toggle={edgeLines} setToggle={setEdgeLines} />
+            </Row>
+            {edgeLines && (
+              <MockSliderField
+                label="Edge Sensitivity"
+                value={0.65}
+                min={0}
+                max={0.95}
+                step={0.01}
+              />
+            )}
           </MockAccordion>
 
           <MockAccordion title="Appearance" action={<MockResetChip />}>

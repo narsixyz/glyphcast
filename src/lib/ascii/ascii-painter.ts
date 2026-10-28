@@ -124,7 +124,11 @@ function getColorImage(data: Uint8ClampedArray, cols: number, rows: number) {
     colorCanvas.width = cols;
     colorCanvas.height = rows;
   }
-  colorCtx!.putImageData(new ImageData(data, cols, rows), 0, 0);
+  colorCtx!.putImageData(
+    new ImageData(data as Uint8ClampedArray<ArrayBuffer>, cols, rows),
+    0,
+    0,
+  );
   return colorCanvas;
 }
 
